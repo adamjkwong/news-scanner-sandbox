@@ -148,19 +148,18 @@ async function fetchAndExtractText(url) {
 
 // Construct highly analytical, specific industry prompts
 function buildPrompt(title, url, text, industry) {
-  return `You are a principal industry analyst. Provide a highly strategic, professional, and concrete 2-sentence business impact analysis of the following article for the target industry: "${industry}".
+  return `Write a professional, exactly two-sentence analysis of the business impact of this article on the "${industry}" industry.
 
 Article Title: ${title}
 Article Link: ${url || 'N/A'}
-${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : 'Note: The article body text is currently unavailable. Extrapolate the core news event, technical concept, or topic from the title and provide a highly detailed industry impact analysis based on your general knowledge.'}
+${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : 'Note: The article text is currently unavailable. Extrapolate the core concept from the title and write the analysis using your general knowledge.'}
 
-Rules:
-1. Return exactly 2 sentences. No headers, lists, markdown bold (*), or introductory text.
-2. Sentence 1: Analyze the core technical innovation, news event, or discovery, and connect it directly to the target industry's current landscape.
-3. Sentence 2: Explain the direct, actionable business opportunity, threat, cost impact, or future trend for companies/professionals in that industry.
-4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures). Do not write period-based abbreviations like "e.g.", "i.e.", "U.S.", or "vs." inside sentences; write them out fully as "for example", "that is", "United States", or "versus" to prevent structure disruption.
-5. Ensure both sentences are detailed, complex, and analytically complete. Do not write short, sparse, or superficial sentences.
-6. Make sure both sentences are 100% grammatically complete and end with a clear final period. Do not cut off mid-thought.`;
+Instructions:
+1. Write exactly 2 sentences. Do not write a list, bullet points, headers, or markdown bold formatting.
+2. Sentence 1: Summarize the core news, technology, or discovery, connecting it to the "${industry}" landscape.
+3. Sentence 2: Detail the direct business opportunity, threat, cost impact, or trend for companies in the "${industry}" industry.
+4. Ensure both sentences are detailed, grammatically complete, have proper punctuation, and end with a final period. Do not cut off mid-sentence.
+5. Do not use abbreviations like "e.g.", "i.e.", "U.S.", or "vs."; write them out fully as "for example", "that is", "United States", or "versus" to avoid sentence structure issues.`;
 }
 
 // Generate summary using Gemini API
@@ -250,10 +249,19 @@ async function generateGemmaSummary(prompt) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'gemma4:e4b',
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { 
+          role: 'system', 
+          content: 'You are a principal industry analyst. Write exactly two grammatically complete, professional sentences. Do not use lists, formatting, or bullet points. Skip any internal reasoning/thinking steps and output the final two sentences directly.' 
+        },
+        { 
+          role: 'user', 
+          content: prompt 
+        }
+      ],
       stream: false,
       options: {
-        num_predict: 800,
+        num_predict: 1200,
         temperature: 0.2
       }
     })
@@ -266,15 +274,15 @@ async function generateGemmaSummary(prompt) {
   const data = await response.json();
   if (data.error) throw new Error(data.error);
   
-  // Resilient Extraction: Check content, fallback to thinking block
+  // Resilient Extraction: Check content first, then fallback to thinking
   let text = data.message?.content;
   if (!text || text.trim() === '') {
     text = data.message?.thinking || '';
   }
   
-  // Clean up any remaining thinking tags if the model leaked them into content
-  text = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  // Strip both complete and incomplete thinking tags to avoid leaking internal notes
+  text = text.replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/gi, '');
+  text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
   text = text.trim();
 
   if (!text) throw new Error('Empty response from local Gemma 4');

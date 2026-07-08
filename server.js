@@ -419,6 +419,8 @@ app.post('/api/summarize', rateLimiter, async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  const scanKey = `scan_${targetUrl || 'hn'}_${industry}_${model}`;
+
   const sendProgress = (message) => {
     res.write(`data: ${JSON.stringify({ type: 'status', message })}\n\n`);
   };
@@ -429,9 +431,22 @@ app.post('/api/summarize', rateLimiter, async (req, res) => {
   };
 
   const sendResult = (stories) => {
+    // Cache the entire scan result array
+    memoryCache.set(scanKey, {
+      stories,
+      timestamp: Date.now()
+    });
     res.write(`data: ${JSON.stringify({ type: 'result', stories })}\n\n`);
     res.end();
   };
+
+  // Check memory cache for the entire scan first
+  const cachedScan = memoryCache.get(scanKey);
+  if (cachedScan && Date.now() - cachedScan.timestamp < 15 * 60 * 1000) {
+    console.log(`[Cache Hit] Serving entire scan from memory cache: ${scanKey}`);
+    sendProgress('Serving summaries from cache...');
+    return sendResult(cachedScan.stories);
+  }
 
   if (!industry) {
     return sendError('Industry is required');

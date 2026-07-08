@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = document.getElementById('submit-btn');
 
   // Target inputs
-  const targetTypeSelect = document.getElementById('target-type-select');
   const targetUrlInput = document.getElementById('target-url-input');
 
   // Loading and Results elements
@@ -232,17 +231,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Target source select dropdown
-    targetTypeSelect.addEventListener('change', () => {
-      if (targetTypeSelect.value === 'url') {
-        // Drop custom URL default
-        targetUrlInput.value = 'https://news.ycombinator.com/';
-        targetUrlInput.disabled = false;
-      } else {
-        targetUrlInput.value = 'https://news.ycombinator.com/';
-      }
-    });
-
     // Form Submission
     summarizerForm.addEventListener('submit', handleFormSubmit);
   }
@@ -273,9 +261,9 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // Get input source and target URL
-    const targetType = targetTypeSelect.value;
+    // Get target URL and dynamically determine type
     const targetUrl = targetUrlInput.value.trim();
+    const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
 
     // Validate target URL using strict regex
     const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;

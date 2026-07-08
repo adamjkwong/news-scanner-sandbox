@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const chips = document.querySelectorAll('.chip');
   const customIndustryInput = document.getElementById('custom-industry-input');
   const submitBtn = document.getElementById('submit-btn');
+  const stopBtn = document.getElementById('stop-btn');
 
   // Target inputs
   const targetUrlInput = document.getElementById('target-url-input');
@@ -39,6 +40,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeIndustry = 'Tech';
   let isScanning = false;
   let rateLimitDelay = 2500;
+
+  // Shadow variables for hover prefetching
+  let hoverScanActive = false;
+  let hoverScanResult = null;
+  let hoverScanError = null;
+  let hoverScanProgress = 'Initiating scan...';
+  let hoverScanStartTime = 0;
+  let hoverScanElapsedSeconds = '0.00';
+  let hoverScanTimerInterval = null;
+  let hoverScanFinalIndustry = '';
+  let hoverScanTargetType = '';
+  let hoverScanTargetUrl = '';
+  let userClicked = false;
+  let abortController = null;
 
   // API Keys state
   let keys = {
@@ -237,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn.addEventListener('mouseenter', () => {
       if (!submitBtn.disabled && !isScanning) {
         rateLimitDelay = 2500; // Reset rate limit to default on fresh scan
-        summarizerForm.requestSubmit();
+        triggerHoverScan(); // Starts prefetch in background
       }
     });
 
@@ -245,14 +260,248 @@ document.addEventListener('DOMContentLoaded', () => {
       rateLimitDelay = 2500; // Reset rate limit on manual click
     });
 
+    // Stop button event listener
+    stopBtn.addEventListener('click', () => {
+      if (abortController) {
+        abortController.abort();
+      }
+    });
+
     // Form Submission
     summarizerForm.addEventListener('submit', handleFormSubmit);
+  }
+
+  // Pre-fetch scan in the background (triggered on hover)
+  async function triggerHoverScan() {
+    if (hoverScanActive || isScanning) return;
+
+    // Validate inputs
+    const hasKey = checkSelectedModelKeyStatus();
+    if (!hasKey) return; 
+
+    const customValue = customIndustryInput.value.trim();
+    const sanitizedCustomValue = customValue.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    if (customValue !== '' && sanitizedCustomValue.trim() === '') return;
+
+    const finalIndustry = customValue !== '' ? sanitizedCustomValue : activeIndustry;
+
+    const targetUrl = targetUrlInput.value.trim();
+    const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
+
+    const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+    if (!urlRegex.test(targetUrl)) return;
+
+    // Lock prefetch hover state
+    hoverScanActive = true;
+    hoverScanResult = null;
+    hoverScanError = null;
+    hoverScanProgress = 'Initiating scan...';
+    hoverScanFinalIndustry = finalIndustry;
+    hoverScanTargetType = targetType;
+    hoverScanTargetUrl = targetUrl;
+    hoverScanStartTime = Date.now();
+    hoverScanElapsedSeconds = '0.00';
+
+    abortController = new AbortController();
+
+    hoverScanTimerInterval = setInterval(() => {
+      hoverScanElapsedSeconds = ((Date.now() - hoverScanStartTime) / 1000).toFixed(2);
+      if (userClicked) {
+        scanTimerElement.textContent = `${hoverScanElapsedSeconds}s`;
+      }
+    }, 10);
+
+    try {
+      const response = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-gemini-key': keys.gemini
+        },
+        body: JSON.stringify({ 
+          industry: finalIndustry,
+          model: activeModel,
+          targetType,
+          targetUrl,
+          delay: rateLimitDelay
+        }),
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        throw new Error(`Connection error: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let resultReceived = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+
+        for (const line of lines) {
+          const cleanLine = line.trim();
+          if (cleanLine.startsWith('data: ')) {
+            let data = null;
+            try {
+              data = JSON.parse(cleanLine.substring(6));
+            } catch (err) {
+              console.error('Error parsing hover stream line:', err);
+              continue;
+            }
+
+            if (data.type === 'status') {
+              hoverScanProgress = data.message;
+              if (userClicked) {
+                progressMessage.textContent = hoverScanProgress;
+              }
+            } else if (data.type === 'error') {
+              throw new Error(data.message);
+            } else if (data.type === 'partial_result') {
+              hoverScanResult = data.stories;
+              if (userClicked) {
+                loadingState.style.display = 'none';
+                renderStories(data.stories, finalIndustry, hoverScanElapsedSeconds, true);
+              }
+            } else if (data.type === 'result') {
+              resultReceived = true;
+              hoverScanResult = data.stories;
+              if (userClicked) {
+                loadingState.style.display = 'none';
+                currentIndustryDisplay.textContent = finalIndustry;
+                resultsHeading.style.display = 'block';
+                renderStories(data.stories, finalIndustry, hoverScanElapsedSeconds, false);
+              }
+            }
+          }
+        }
+      }
+
+      // Parse trailing content
+      const trailingContent = buffer.trim();
+      if (trailingContent.startsWith('data: ')) {
+        let data = null;
+        try {
+          data = JSON.parse(trailingContent.substring(6));
+        } catch (err) {
+          console.error('Error parsing trailing hover buffer:', err);
+        }
+
+        if (data) {
+          if (data.type === 'result') {
+            resultReceived = true;
+            hoverScanResult = data.stories;
+            if (userClicked) {
+              loadingState.style.display = 'none';
+              currentIndustryDisplay.textContent = finalIndustry;
+              resultsHeading.style.display = 'block';
+              renderStories(data.stories, finalIndustry, hoverScanElapsedSeconds, false);
+            }
+          } else if (data.type === 'error') {
+            throw new Error(data.message);
+          }
+        }
+      }
+
+      if (!resultReceived) {
+        throw new Error('Connection closed before final summaries could compile.');
+      }
+
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Hover scan aborted.');
+        hoverScanError = 'Scan cancelled by user.';
+      } else {
+        console.error('Hover fetch error:', error);
+        hoverScanError = error.message;
+      }
+      if (userClicked) {
+        renderErrorState(hoverScanError);
+      }
+    } finally {
+      clearInterval(hoverScanTimerInterval);
+      hoverScanActive = false;
+      if (userClicked) {
+        isScanning = false;
+        submitBtn.disabled = false;
+        stopBtn.style.display = 'none';
+        progressContainer.style.display = 'none';
+        loadingState.style.display = 'none';
+      }
+    }
   }
 
   // Handle data fetching and summarizing (Reading SSE/Chunked response)
   async function handleFormSubmit(e) {
     e.preventDefault();
     if (isScanning) return;
+
+    // Determine values
+    const targetUrl = targetUrlInput.value.trim();
+    const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
+    const customValue = customIndustryInput.value.trim();
+    const sanitizedCustomValue = customValue.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    const finalIndustry = customValue !== '' ? sanitizedCustomValue : activeIndustry;
+
+    // Check if the user changed the input fields since we started hover scan
+    const inputsChanged = targetUrl !== hoverScanTargetUrl || 
+                          targetType !== hoverScanTargetType || 
+                          finalIndustry !== hoverScanFinalIndustry;
+
+    // If inputs changed, discard hover scan
+    if (inputsChanged && hoverScanActive) {
+      if (abortController) {
+        abortController.abort(); // Cancel old fetch
+      }
+      hoverScanActive = false;
+      hoverScanResult = null;
+      hoverScanError = null;
+    }
+
+    userClicked = true;
+
+    // Case 1: Hover pre-fetch completed successfully
+    if (!hoverScanActive && hoverScanResult && !inputsChanged) {
+      currentIndustryDisplay.textContent = hoverScanFinalIndustry;
+      resultsHeading.style.display = 'block';
+      renderStories(hoverScanResult, hoverScanFinalIndustry, hoverScanElapsedSeconds, false);
+      userClicked = false;
+      return;
+    }
+
+    // Case 2: Hover pre-fetch completed with error
+    if (!hoverScanActive && hoverScanError && !inputsChanged) {
+      renderErrorState(hoverScanError);
+      userClicked = false;
+      return;
+    }
+
+    // Case 3: Hover pre-fetch is still active in background
+    if (hoverScanActive && !inputsChanged) {
+      isScanning = true;
+      submitBtn.disabled = true;
+      stopBtn.style.display = 'inline-flex';
+      progressContainer.style.display = 'flex';
+      progressMessage.textContent = hoverScanProgress;
+      scanTimerElement.textContent = `${hoverScanElapsedSeconds}s`;
+
+      if (hoverScanResult) {
+        renderStories(hoverScanResult, hoverScanFinalIndustry, hoverScanElapsedSeconds, true);
+      } else {
+        loadingState.style.display = 'flex';
+        storiesContainer.innerHTML = '';
+      }
+      resultsHeading.style.display = 'none';
+      return;
+    }
+
+    // Case 4: Fresh scan required (hover scan was not running or inputs changed)
     isScanning = true;
 
     // 1. Verify API key status before calling
@@ -260,34 +509,29 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!hasKey) {
       openModal('gemini-key-input');
       isScanning = false;
+      userClicked = false;
       return;
     }
 
-    // Determine final industry value and sanitize using regex
-    const customValue = customIndustryInput.value.trim();
-    const sanitizedCustomValue = customValue.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    // Validate inputs
     if (customValue !== '' && sanitizedCustomValue.trim() === '') {
       alert('Please enter a valid custom industry name (alphanumeric, spaces, or hyphens only).');
       isScanning = false;
+      userClicked = false;
       return;
     }
 
-    const finalIndustry = customValue !== '' ? sanitizedCustomValue : activeIndustry;
-
-    // Get target URL and dynamically determine type
-    const targetUrl = targetUrlInput.value.trim();
-    const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
-
-    // Validate target URL using strict regex
     const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
     if (!urlRegex.test(targetUrl)) {
       alert('Please enter a valid target URL starting with http:// or https://');
       isScanning = false;
+      userClicked = false;
       return;
     }
 
     // Set UI to loading state
     submitBtn.disabled = true;
+    stopBtn.style.display = 'inline-flex';
     progressContainer.style.display = 'flex';
     progressMessage.textContent = 'Initiating scan...';
     scanTimerElement.textContent = '0.00s';
@@ -297,6 +541,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let startTime = Date.now();
     let elapsedSeconds = '0.00';
+    
+    abortController = new AbortController();
+
     const timerInterval = setInterval(() => {
       elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
       scanTimerElement.textContent = `${elapsedSeconds}s`;
@@ -315,7 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
           targetType,
           targetUrl,
           delay: rateLimitDelay
-        })
+        }),
+        signal: abortController.signal
       });
 
       if (!response.ok) {
@@ -356,11 +604,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Gemini API Key is required. Configure in settings.');
               }
               throw new Error(data.message);
+            } else if (data.type === 'partial_result') {
+              loadingState.style.display = 'none';
+              renderStories(data.stories, finalIndustry, elapsedSeconds, true);
             } else if (data.type === 'result') {
               resultReceived = true;
+              loadingState.style.display = 'none';
               currentIndustryDisplay.textContent = finalIndustry;
               resultsHeading.style.display = 'block';
-              renderStories(data.stories, finalIndustry, elapsedSeconds);
+              renderStories(data.stories, finalIndustry, elapsedSeconds, false);
             }
           }
         }
@@ -379,9 +631,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data) {
           if (data.type === 'result') {
             resultReceived = true;
+            loadingState.style.display = 'none';
             currentIndustryDisplay.textContent = finalIndustry;
             resultsHeading.style.display = 'block';
-            renderStories(data.stories, finalIndustry, elapsedSeconds);
+            renderStories(data.stories, finalIndustry, elapsedSeconds, false);
           } else if (data.type === 'error') {
             throw new Error(data.message);
           }
@@ -393,19 +646,26 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
     } catch (error) {
-      console.error('Fetch error:', error);
-      renderErrorState(error.message);
+      if (error.name === 'AbortError') {
+        console.log('Main scan aborted.');
+        renderErrorState('Scan cancelled by user.');
+      } else {
+        console.error('Fetch error:', error);
+        renderErrorState(error.message);
+      }
     } finally {
       clearInterval(timerInterval);
       submitBtn.disabled = false;
+      stopBtn.style.display = 'none';
       isScanning = false;
+      userClicked = false;
       progressContainer.style.display = 'none';
       loadingState.style.display = 'none';
     }
   }
 
-  // Render story list
-  function renderStories(stories, industryName, elapsedSeconds) {
+  // Render story list (Supports incremental partial rendering and dynamic skeletons)
+  function renderStories(stories, industryName, elapsedSeconds, isPartial = false) {
     if (!stories || stories.length === 0) {
       storiesContainer.innerHTML = `
         <div class="empty-state">
@@ -419,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${industryName}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${elapsedSeconds}s)</span>`;
 
-    const html = stories.map((story, index) => {
+    let cardsHtml = stories.map((story, index) => {
       const linkTarget = story.url ? `href="${story.url}" target="_blank" rel="noopener"` : '';
       const externalIcon = story.url ? `
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -453,7 +713,26 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
     }).join('');
 
-    storiesContainer.innerHTML = html;
+    // Append dynamic skeletons if loading is in progress (partial)
+    if (isPartial) {
+      const targetUrl = targetUrlInput.value.trim();
+      const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
+      const expectedTotal = targetType === 'hn' ? 5 : 1;
+      
+      const skeletonsNeeded = Math.max(0, expectedTotal - stories.length);
+      for (let i = 0; i < skeletonsNeeded; i++) {
+        cardsHtml += `
+          <div class="skeleton-card" style="margin-top: 1.5rem; opacity: 0.7;">
+            <div class="skeleton-meta"></div>
+            <div class="skeleton-title"></div>
+            <div class="skeleton-summary-1"></div>
+            <div class="skeleton-summary-2"></div>
+          </div>
+        `;
+      }
+    }
+
+    storiesContainer.innerHTML = cardsHtml;
   }
 
   // Render error message card with retry slowdown option
@@ -476,6 +755,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (retryBtn) {
       retryBtn.addEventListener('click', () => {
         rateLimitDelay = 5000; // Slow down rate limits on retry!
+        // Reset hoverScan states so a fresh scan starts
+        hoverScanResult = null;
+        hoverScanError = null;
+        hoverScanActive = false;
+        userClicked = false;
+        isScanning = false;
         progressMessage.textContent = 'Retrying with slower rate limit (5.0s delay)...';
         summarizerForm.requestSubmit();
       });

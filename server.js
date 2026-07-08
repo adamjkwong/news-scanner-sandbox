@@ -349,6 +349,8 @@ app.post('/api/summarize', async (req, res) => {
           hnUrl: `https://news.ycombinator.com/item?id=${id}`,
           summary
         });
+        
+        res.write(`data: ${JSON.stringify({ type: 'partial_result', stories: summarizedStories })}\n\n`);
         index++;
       }
 

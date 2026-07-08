@@ -467,6 +467,50 @@
     outline-offset: 2px;
   }
 
+  .stop-button {
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 0.85rem 1.5rem;
+    font-weight: 800;
+    font-size: 1.05rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-block-size: 48px;
+    background: linear-gradient(
+      120deg,
+      oklch(60.9% 0.258 29.2) 0%,
+      oklch(60.9% 0.258 29.2) 35%,
+      oklch(72% 0.2 29.2) 45%,
+      oklch(72% 0.2 29.2) 55%,
+      oklch(50% 0.2 29.2) 65%,
+      oklch(50% 0.2 29.2) 100%
+    );
+    background-size: 200% 100%;
+    background-position: 100% 0;
+    animation: buttonShine 4s infinite linear;
+    box-shadow: 0 4px 15px oklch(60.9% 0.258 29.2 / 0.25);
+    transition: transform 0.15s ease, filter 0.15s ease;
+  }
+
+  .stop-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px oklch(60.9% 0.258 29.2 / 0.35);
+    filter: brightness(1.05);
+  }
+
+  .stop-button:active {
+    transform: translateY(0);
+  }
+
+  .stop-button:focus-visible {
+    outline: 2px solid var(--color-lava-600);
+    outline-offset: 2px;
+  }
+
   @keyframes buttonShine {
     0% {
       background-position: 200% 0;

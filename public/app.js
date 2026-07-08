@@ -720,7 +720,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <article class="story-card" style="animation-delay: ${index * 0.1}s">
           <div class="story-meta">
             ${isCustomUrl ? `<span class="story-rank">Scanned Target</span>` : `<span class="story-rank">#${index + 1}</span>`}
-            ${isCustomUrl ? '' : `<span class="story-score">${escapeHTML(story.score)} points</span>`}
             ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}
             ${isCustomUrl ? '' : `<span class="story-author">by ${escapeHTML(story.author)}</span>`}
             ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}

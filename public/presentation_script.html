@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>News Scanner Sandbox - Walkthrough Script</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151e2e;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent: #3b82f6;
+      --code-bg: #0d1117;
+      --border: #243b55;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      margin: 0;
+      padding: 40px 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      max-width: 900px;
+      width: 100%;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 2.5rem;
+      margin: 0 0 10px 0;
+      color: #fff;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      margin: 0;
+    }
+
+    .section {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 30px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 20px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      color: var(--accent);
+    }
+
+    .time-tag {
+      background-color: var(--border);
+      color: var(--text);
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+
+    .cue {
+      background-color: rgba(59, 130, 246, 0.1);
+      border-left: 4px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 20px;
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    .speak-block {
+      font-size: 1.25rem;
+      font-weight: 500;
+      margin-bottom: 25px;
+      color: #fff;
+    }
+
+    .line-marker {
+      color: #ef4444;
+      font-weight: bold;
+      font-size: 0.95rem;
+      background-color: rgba(239, 68, 68, 0.1);
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-left: 8px;
+    }
+
+    pre {
+      background-color: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      margin: 15px 0;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.95rem;
+      color: #e6edf3;
+    }
+
+    .code-label {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 10px;
+      display: block;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Code Review Script</h1>
+      <p class="subtitle">News Scanner Sandbox Walkthrough (1-Minute Limit)</p>
+    </header>
+
+    <!-- SECTION 1 -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Part 1: High-Level Overview</h2>
+        <span class="time-tag">0:00 - 0:20</span>
+      </div>
+      <div class="cue">Action: Show GitHub repository / Project folder structure</div>
+      
+      <div class="speak-block">
+        "This is the <strong>News Scanner Sandbox</strong>, a simple web app that grabs stories from news feeds or custom websites, and summarizes how they affect different industries using AI."
+      </div>
+      
+      <div class="speak-block">
+        "The setup is very basic: we use standard code on the server and standard files in the browser, without any complicated frameworks or setup steps."
+      </div>
+
+      <div class="speak-block">
+        "The frontend is split into three main files: 
+        <strong>index.html</strong> builds the layout, 
+        <strong>styles.css</strong> sets the design, and 
+        <strong>app.js</strong> runs the browser logic: saving keys, managing settings, and loading summaries."
+      </div>
+    </div>
+
+    <!-- SECTION 2 -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Part 2: Frontend UX Walkthrough</h2>
+        <span class="time-tag">0:20 - 0:40</span>
+      </div>
+      <div class="cue">Action: Open public/app.js and scroll to Line 562</div>
+
+      <div class="speak-block">
+        "Inside the browser code, we focus on making the page feel fast and active. While the AI is thinking, we run a fast stopwatch on screen to show the elapsed time."
+        <span class="line-marker">[public/app.js - Line 562]</span>
+      </div>
+
+      <span class="code-label">Timer Loop:</span>
+      <pre><code>const timerInterval = setInterval(() => {
+  elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
+  scanTimerElement.textContent = `${elapsedSeconds}s`;
+}, 10);</code></pre>
+
+      <div class="speak-block" style="margin-top: 30px;">
+        "To make the wait smoother, we draw empty placeholder cards on screen so the user knows where the content is going to load."
+        <span class="line-marker">[public/app.js - Line 763]</span>
+      </div>
+
+      <span class="code-label">Placeholder Cards:</span>
+      <pre><code>cardsHtml += `
+  &lt;div class="skeleton-card" style="margin-top: 1.5rem; opacity: 0.7;"&gt;
+    &lt;div class="skeleton-meta"&gt;&lt;/div&gt;
+    &lt;div class="skeleton-title"&gt;&lt;/div&gt;
+    &lt;div class="skeleton-summary-1"&gt;&lt;/div&gt;
+    &lt;div class="skeleton-summary-2"&gt;&lt;/div&gt;
+  &lt;/div&gt;
+`;</code></pre>
+    </div>
+
+    <!-- SECTION 3 -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Part 3: Backend Server Walkthrough</h2>
+        <span class="time-tag">0:40 - 0:55</span>
+      </div>
+      <div class="cue">Action: Open server.js and scroll to Line 167</div>
+
+      <div class="speak-block">
+        "Now looking at the server, here is where we make the actual call to Google's Gemini API, passing the article and industry instructions to generate the summary."
+        <span class="line-marker">[server.js - Line 167]</span>
+      </div>
+
+      <span class="code-label">Gemini API Call:</span>
+      <pre><code>async function generateGeminiSummary(prompt, apiKey) {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 600, temperature: 0.2 }
+      })
+    }
+  );</code></pre>
+
+      <div class="speak-block" style="margin-top: 30px;">
+        "To send these summaries to the user, we open a persistent connection. This lets the server send each card one by one as they finish, rather than keeping the user waiting for the entire run."
+        <span class="line-marker">[server.js - Line 417]</span>
+      </div>
+
+      <span class="code-label">SSE Stream Setup:</span>
+      <pre><code>res.setHeader('Content-Type', 'text/event-stream');
+res.setHeader('Cache-Control', 'no-cache');
+res.setHeader('Connection', 'keep-alive');
+res.flushHeaders();</code></pre>
+
+      <div class="speak-block" style="margin-top: 30px;">
+        "To avoid making duplicate AI requests, the server checks its memory bank first. If we ran this exact scan recently, we load it instantly."
+        <span class="line-marker">[server.js - Line 444]</span>
+      </div>
+
+      <span class="code-label">Instant Cache Check:</span>
+      <pre><code>const cachedScan = summaryCache.get(scanKey);
+if (cachedScan && Date.now() - cachedScan.timestamp < CACHE_TTL_MS) {
+  console.log(`[Cache Hit] Serving entire scan...`);
+  sendProgress('Serving summaries from cache...');
+  return sendResult(cachedScan.stories);
+}</code></pre>
+
+      <div class="speak-block" style="margin-top: 30px;">
+        "If it's not saved, we pull the articles, read the text, query the model, and stream the results back to the browser."
+        <span class="line-marker">[server.js - Line 618]</span>
+      </div>
+
+      <span class="code-label">Write Stream Chunk:</span>
+      <pre><code>res.write(`data: ${JSON.stringify({ type: 'partial_result', stories: summarizedStories })}\n\n`);</code></pre>
+    </div>
+
+    <!-- SECTION 4 -->
+    <div class="section">
+      <div class="section-header">
+        <h2>Part 4: Outro</h2>
+        <span class="time-tag">0:55 - 1:00</span>
+      </div>
+      <div class="speak-block">
+        "And that is the whole app! A simple, secure, and fast AI news scanner."
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

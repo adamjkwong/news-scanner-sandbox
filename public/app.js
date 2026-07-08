@@ -704,6 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    console.log(`[UI] renderStories called: elapsedSeconds = ${elapsedSeconds}s, isPartial = ${isPartial}`);
     resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${escapeHTML(industryName)}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${escapeHTML(elapsedSeconds)}s)</span>`;
 
     let cardsHtml = stories.map((story, index) => {
@@ -741,9 +742,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Append dynamic skeletons if loading is in progress (partial)
     if (isPartial) {
-      const targetUrl = targetUrlInput.value.trim();
-      const targetType = targetUrl.toLowerCase().includes('news.ycombinator.com') ? 'hn' : 'url';
-      const expectedTotal = targetType === 'hn' ? 5 : 1;
+      const expectedTotal = 5;
       
       const skeletonsNeeded = Math.max(0, expectedTotal - stories.length);
       for (let i = 0; i < skeletonsNeeded; i++) {

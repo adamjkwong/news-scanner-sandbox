@@ -265,9 +265,20 @@ async function generateGemmaSummary(prompt) {
 
   const data = await response.json();
   if (data.error) throw new Error(data.error);
-  const text = data.message?.content;
+  
+  // Resilient Extraction: Check content, fallback to thinking block
+  let text = data.message?.content;
+  if (!text || text.trim() === '') {
+    text = data.message?.thinking || '';
+  }
+  
+  // Clean up any remaining thinking tags if the model leaked them into content
+  text = text.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '');
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  text = text.trim();
+
   if (!text) throw new Error('Empty response from local Gemma 4');
-  return text.trim();
+  return text;
 }
 
 // Dispatch summary generation based on selected model
@@ -313,6 +324,72 @@ async function generateSummary(title, url, text, industry, model, keys) {
     console.error(`Error generating ${model} summary for "${title}":`, error.message);
     throw error;
   }
+}
+
+// Extract top 3-5 article links from a landing page's HTML content
+function extractArticleLinks(html, baseUrl) {
+  const links = [];
+  const seenUrls = new Set();
+  
+  const aTagRegex = /<a\s+(?:[^>]*?\s+)?href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  
+  let urlObj;
+  try {
+    urlObj = new URL(baseUrl);
+  } catch (e) {
+    return [];
+  }
+  const origin = urlObj.origin;
+  
+  while ((match = aTagRegex.exec(html)) !== null) {
+    let href = match[1].trim();
+    let text = match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Resolve relative URLs
+    if (href.startsWith('//')) {
+      href = 'https:' + href;
+    } else if (href.startsWith('/')) {
+      href = origin + href;
+    } else if (!href.startsWith('http://') && !href.startsWith('https://')) {
+      const pathParts = urlObj.pathname.split('/');
+      pathParts.pop();
+      href = origin + pathParts.join('/') + '/' + href;
+    }
+    
+    try {
+      const resolvedUrl = new URL(href);
+      href = resolvedUrl.href;
+    } catch (e) {
+      continue;
+    }
+    
+    const lowerHref = href.toLowerCase();
+    const lowerText = text.toLowerCase();
+    
+    // Filter junk links (logins, home page, privacy, contact, very short labels)
+    if (lowerHref === origin + '/' ||
+        lowerHref === origin ||
+        lowerHref.includes('/login') ||
+        lowerHref.includes('/signup') ||
+        lowerHref.includes('/register') ||
+        lowerHref.includes('/privacy') ||
+        lowerHref.includes('/terms') ||
+        lowerHref.includes('/contact') ||
+        lowerHref.includes('/about') ||
+        lowerHref.includes('/cookie') ||
+        lowerText.length < 15 || 
+        seenUrls.has(href)) {
+      continue;
+    }
+    
+    seenUrls.add(href);
+    links.push({ url: href, title: text });
+    
+    if (links.length >= 5) break;
+  }
+  
+  return links;
 }
 
 // API endpoint to fetch and summarize (Streaming Response)
@@ -366,25 +443,99 @@ app.post('/api/summarize', rateLimiter, async (req, res) => {
     if (targetType === 'url') {
       // SCAN CUSTOM URL
       sendProgress(`Connecting to custom URL: ${targetUrl}...`);
-      const { title, excerpt } = await fetchAndExtractText(targetUrl);
-
-      sendProgress(`Scraped page content successfully. Analyzing text...`);
-      sendProgress(`Summarizing article: "${title.substring(0, 50)}..."`);
       
-      const summary = await generateSummary(title, targetUrl, excerpt, industry, model, keys);
+      const response = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'NewsScannerSandbox/1.0; (+https://github.com/adamjkwong/news-scanner-sandbox; compliance-check)'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Failed to fetch page: HTTP ${response.status}`);
+      }
+      const html = await response.text();
 
-      const story = {
-        id: 'custom-url',
-        title,
-        url: targetUrl,
-        score: 'N/A',
-        author: 'custom source',
-        hnUrl: '#',
-        summary
-      };
+      // Extract main page title
+      const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      const mainTitle = titleMatch ? titleMatch[1].trim() : 'Scanned Target';
 
-      sendProgress('Scan completed successfully.');
-      return sendResult([story]);
+      // Extract child article links
+      sendProgress('Analyzing page structure and extracting article links...');
+      const articleLinks = extractArticleLinks(html, targetUrl);
+
+      const summarizedStories = [];
+
+      if (articleLinks.length >= 3) {
+        const numArticles = Math.min(5, articleLinks.length);
+        sendProgress(`Found ${articleLinks.length} article links. Scanning top ${numArticles}...`);
+
+        let index = 1;
+        for (const article of articleLinks.slice(0, numArticles)) {
+          const title = article.title || 'Untitled';
+          const url = article.url;
+
+          if (index > 1) {
+            sendProgress('Rate limit cooldown, waiting a moment...');
+            await sleep(delay);
+          }
+
+          sendProgress(`Scraping article ${index} of ${numArticles}: "${title.substring(0, 30)}..."`);
+          let articleText = '';
+          try {
+            const scraped = await fetchAndExtractText(url);
+            articleText = scraped.excerpt;
+          } catch (e) {
+            console.warn(`Could not scrape sub-article ${url}:`, e.message);
+          }
+
+          sendProgress(`Summarizing article ${index} of ${numArticles}: "${title.substring(0, 45)}..."`);
+          const summary = await generateSummary(title, url, articleText, industry, model, keys);
+
+          summarizedStories.push({
+            id: `custom-url-${index}`,
+            title,
+            url,
+            score: 'N/A',
+            author: 'extracted link',
+            hnUrl: '#',
+            summary
+          });
+
+          res.write(`data: ${JSON.stringify({ type: 'partial_result', stories: summarizedStories })}\n\n`);
+          index++;
+        }
+
+        sendProgress('Scan completed successfully.');
+        return sendResult(summarizedStories);
+
+      } else {
+        // Fallback: treat parent page itself as a single direct article
+        sendProgress('Page appears to be a direct article. Scraping full page content...');
+        
+        let textContent = html
+          .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+          .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+          
+        let excerpt = textContent.substring(0, 6000);
+
+        sendProgress(`Summarizing article: "${mainTitle.substring(0, 50)}..."`);
+        const summary = await generateSummary(mainTitle, targetUrl, excerpt, industry, model, keys);
+
+        const story = {
+          id: 'custom-url',
+          title: mainTitle,
+          url: targetUrl,
+          score: 'N/A',
+          author: 'custom source',
+          hnUrl: '#',
+          summary
+        };
+
+        sendProgress('Scan completed successfully.');
+        return sendResult([story]);
+      }
 
     } else {
       // SCAN HACKER NEWS FEED

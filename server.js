@@ -26,19 +26,56 @@ async function fetchHNStory(id) {
   }
 }
 
-// Prompt constructor
+// Fetch and extract text from a custom URL
+async function fetchAndExtractText(url) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch page: HTTP ${response.status}`);
+    }
+
+    const html = await response.text();
+    
+    // Extract title
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : 'Scanned Article';
+
+    // Strip scripts, styles, and tags
+    let textContent = html
+      .replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, '')
+      .replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit text size sent to LLM to prevent token overflows (approx 6000 chars)
+    const excerpt = textContent.substring(0, 6000);
+
+    return { title, excerpt };
+  } catch (error) {
+    console.error(`Error scraping URL "${url}":`, error.message);
+    throw new Error(`Failed to read the target URL: ${error.message}`);
+  }
+}
+
+// Construct highly analytical, specific industry prompts
 function buildPrompt(title, url, text, industry) {
-  return `You are an expert industry analyst. Analyze this Hacker News article for the target industry: "${industry}".
+  return `You are a principal industry analyst. Provide a highly strategic, professional, and concrete 2-sentence business impact analysis of the following article for the target industry: "${industry}".
+
 Article Title: ${title}
 Article Link: ${url || 'N/A'}
-${text ? `Article Snippet/Text: ${text.substring(0, 1000)}` : ''}
+${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : ''}
 
-Provide a 2-sentence summary explaining "Why this matters for the ${industry} industry".
 Rules:
-1. Must be exactly two sentences.
-2. Directly explain the implications, threats, or opportunities for the specified industry.
-3. Be professional, direct, and insightful.
-4. Do not include any intro, outro, headers, markdown lists, or meta-commentary. Just return the two sentences.`;
+1. Return exactly 2 sentences. No headers, lists, markdown bold (*), or introductory text.
+2. Sentence 1: Analyze the core technical innovation, news event, or discovery, and connect it directly to the target industry's current landscape.
+3. Sentence 2: Explain the direct, actionable business opportunity, threat, cost impact, or future trend for companies/professionals in that industry.
+4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures).`;
 }
 
 // Generate summary using Gemini API
@@ -50,7 +87,7 @@ async function generateGeminiSummary(prompt, apiKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 150, temperature: 0.2 }
+        generationConfig: { maxOutputTokens: 250, temperature: 0.2 }
       })
     }
   );
@@ -77,7 +114,7 @@ async function generateOpenAISummary(prompt, apiKey) {
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 150,
+      max_tokens: 250,
       temperature: 0.2
     })
   });
@@ -104,7 +141,7 @@ async function generateAnthropicSummary(prompt, apiKey) {
     },
     body: JSON.stringify({
       model: 'claude-3-5-haiku-20241022',
-      max_tokens: 150,
+      max_tokens: 250,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2
     })
@@ -138,10 +175,7 @@ async function generateGemmaSummary(prompt) {
   }
 
   const data = await response.json();
-  console.log("Ollama Response Data:", data);
-  if (data.error) {
-    throw new Error(data.error);
-  }
+  if (data.error) throw new Error(data.error);
   const text = data.response;
   if (!text) throw new Error('Empty response from local Gemma 4');
   return text.trim();
@@ -172,9 +206,9 @@ async function generateSummary(title, url, text, industry, model, keys) {
   }
 }
 
-// API endpoint to fetch top 5 stories and summarize them
+// API endpoint to fetch and summarize (Streaming Response)
 app.post('/api/summarize', async (req, res) => {
-  const { industry, model = 'gemini' } = req.body;
+  const { industry, model = 'gemini', targetType = 'hn', targetUrl = '' } = req.body;
   
   // Extract keys from request headers or environment variables
   const keys = {
@@ -183,70 +217,112 @@ app.post('/api/summarize', async (req, res) => {
     claude: req.headers['x-anthropic-key'] || process.env.ANTHROPIC_API_KEY
   };
 
+  // Configure response headers for Server-Sent Events (SSE) stream
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const sendProgress = (message) => {
+    res.write(`data: ${JSON.stringify({ type: 'status', message })}\n\n`);
+  };
+
+  const sendError = (message) => {
+    res.write(`data: ${JSON.stringify({ type: 'error', message })}\n\n`);
+    res.end();
+  };
+
+  const sendResult = (stories) => {
+    res.write(`data: ${JSON.stringify({ type: 'result', stories })}\n\n`);
+    res.end();
+  };
+
   if (!industry) {
-    return res.status(400).json({ error: 'Industry is required' });
+    return sendError('Industry is required');
   }
 
   // Validate API keys for cloud models
   if (model === 'gemini' && (!keys.gemini || keys.gemini.trim() === '')) {
-    return res.status(401).json({ error: 'API_KEY_REQUIRED', message: 'Gemini API Key is required. Please check configuration.' });
+    return sendError('API_KEY_REQUIRED_GEMINI');
   }
   if (model === 'openai' && (!keys.openai || keys.openai.trim() === '')) {
-    return res.status(401).json({ error: 'API_KEY_REQUIRED', message: 'OpenAI API Key is required. Please check configuration.' });
+    return sendError('API_KEY_REQUIRED_OPENAI');
   }
   if (model === 'claude' && (!keys.claude || keys.claude.trim() === '')) {
-    return res.status(401).json({ error: 'API_KEY_REQUIRED', message: 'Anthropic API Key is required. Please check configuration.' });
+    return sendError('API_KEY_REQUIRED_CLAUDE');
   }
 
   try {
-    // 1. Fetch top story IDs
-    const topStoriesRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
-    if (!topStoriesRes.ok) {
-      throw new Error(`Failed to fetch top stories: HTTP ${topStoriesRes.status}`);
-    }
-    const storyIds = await topStoriesRes.json();
-    
-    // Slice first 5 story IDs
-    const top5Ids = storyIds.slice(0, 5);
+    if (targetType === 'url') {
+      // SCAN CUSTOM URL
+      sendProgress(`Connecting to custom URL: ${targetUrl}...`);
+      const { title, excerpt } = await fetchAndExtractText(targetUrl);
 
-    // 2. Fetch details for all 5 stories concurrently
-    const storiesPromises = top5Ids.map(id => fetchHNStory(id));
-    const rawStories = await Promise.all(storiesPromises);
+      sendProgress(`Scraped page content successfully. Analyzing text...`);
+      sendProgress(`Summarizing article: "${title.substring(0, 50)}..."`);
+      
+      const summary = await generateSummary(title, targetUrl, excerpt, industry, model, keys);
 
-    // Filter out null values
-    const validStories = rawStories.filter(story => story !== null);
-
-    // 3. Generate summaries sequentially
-    const summarizedStories = [];
-    for (const story of validStories) {
-      const title = story.title || 'Untitled';
-      const url = story.url || '';
-      const text = story.text || '';
-      const score = story.score || 0;
-      const author = story.by || 'unknown';
-      const id = story.id;
-
-      const summary = await generateSummary(title, url, text, industry, model, keys);
-
-      summarizedStories.push({
-        id,
+      const story = {
+        id: 'custom-url',
         title,
-        url,
-        score,
-        author,
-        hnUrl: `https://news.ycombinator.com/item?id=${id}`,
+        url: targetUrl,
+        score: 'N/A',
+        author: 'custom source',
+        hnUrl: '#',
         summary
-      });
-    }
+      };
 
-    res.json({
-      industry,
-      model,
-      stories: summarizedStories
-    });
+      sendProgress('Scan completed successfully.');
+      return sendResult([story]);
+
+    } else {
+      // SCAN HACKER NEWS FEED
+      sendProgress('Connecting to Hacker News API...');
+      const topStoriesRes = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json');
+      if (!topStoriesRes.ok) {
+        throw new Error(`Failed to fetch top stories from HN API: HTTP ${topStoriesRes.status}`);
+      }
+      const storyIds = await topStoriesRes.json();
+      const top5Ids = storyIds.slice(0, 5);
+
+      sendProgress('Pulling top 5 headlines...');
+      const storiesPromises = top5Ids.map(id => fetchHNStory(id));
+      const rawStories = await Promise.all(storiesPromises);
+      const validStories = rawStories.filter(story => story !== null);
+
+      const summarizedStories = [];
+      let index = 1;
+
+      for (const story of validStories) {
+        const title = story.title || 'Untitled';
+        const url = story.url || '';
+        const text = story.text || '';
+        const score = story.score || 0;
+        const author = story.by || 'unknown';
+        const id = story.id;
+
+        sendProgress(`Summarizing article ${index} of 5: "${title.substring(0, 45)}..."`);
+        const summary = await generateSummary(title, url, text, industry, model, keys);
+
+        summarizedStories.push({
+          id,
+          title,
+          url,
+          score,
+          author,
+          hnUrl: `https://news.ycombinator.com/item?id=${id}`,
+          summary
+        });
+        index++;
+      }
+
+      sendProgress('Scan completed successfully.');
+      return sendResult(summarizedStories);
+    }
   } catch (error) {
     console.error('Error in /api/summarize:', error);
-    res.status(500).json({ error: 'SERVER_ERROR', message: error.message });
+    sendError(error.message);
   }
 });
 

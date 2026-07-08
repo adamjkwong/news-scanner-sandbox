@@ -12,8 +12,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // API Inputs
   const geminiKeyInput = document.getElementById('gemini-key-input');
-  const openaiKeyInput = document.getElementById('openai-key-input');
-  const anthropicKeyInput = document.getElementById('anthropic-key-input');
 
   const summarizerForm = document.getElementById('summarizer-form');
   const modelChipsContainer = document.getElementById('model-chips');
@@ -24,6 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const customIndustryInput = document.getElementById('custom-industry-input');
   const submitBtn = document.getElementById('submit-btn');
 
+  // Target inputs
+  const targetTypeSelect = document.getElementById('target-type-select');
+  const targetUrlInput = document.getElementById('target-url-input');
+
+  // Loading and Results elements
+  const progressContainer = document.getElementById('progress-container');
+  const progressMessage = document.getElementById('progress-message');
   const resultsHeading = document.getElementById('results-heading');
   const currentIndustryDisplay = document.getElementById('current-industry-display');
   const loadingState = document.getElementById('loading-state');
@@ -35,9 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // API Keys state
   let keys = {
-    gemini: localStorage.getItem('hn_scanner_gemini_key') || '',
-    openai: localStorage.getItem('hn_scanner_openai_key') || '',
-    claude: localStorage.getItem('hn_scanner_anthropic_key') || ''
+    gemini: localStorage.getItem('hn_scanner_gemini_key') || ''
   };
 
   // Initialize
@@ -86,18 +89,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Settings Modal Logic
   function initSettings() {
     geminiKeyInput.value = keys.gemini;
-    openaiKeyInput.value = keys.openai;
-    anthropicKeyInput.value = keys.claude;
   }
 
   // Check if current selected model has its required API key
   function checkSelectedModelKeyStatus() {
-    if (activeModel === 'gemma') {
+    if (activeModel !== 'gemini') {
       apiKeyAlert.style.display = 'none';
       return true;
     }
 
-    const currentKey = keys[activeModel];
+    const currentKey = keys.gemini;
     if (!currentKey || currentKey.trim() === '') {
       apiKeyAlert.style.display = 'flex';
       return false;
@@ -146,12 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsForm.addEventListener('submit', (e) => {
       e.preventDefault();
       keys.gemini = geminiKeyInput.value.trim();
-      keys.openai = openaiKeyInput.value.trim();
-      keys.claude = anthropicKeyInput.value.trim();
-
       localStorage.setItem('hn_scanner_gemini_key', keys.gemini);
-      localStorage.setItem('hn_scanner_openai_key', keys.openai);
-      localStorage.setItem('hn_scanner_anthropic_key', keys.claude);
 
       checkSelectedModelKeyStatus();
       closeModal();
@@ -189,7 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // LLM Model Selection Chips
     modelChipsContainer.addEventListener('click', (e) => {
       const targetChip = e.target.closest('.model-chip');
-      if (!targetChip) return;
+      if (!targetChip || targetChip.classList.contains('disabled-chip')) return;
 
       modelChips.forEach(c => {
         c.classList.remove('active');
@@ -236,36 +232,62 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // Target source select dropdown
+    targetTypeSelect.addEventListener('change', () => {
+      if (targetTypeSelect.value === 'url') {
+        // Drop custom URL default
+        targetUrlInput.value = 'https://news.ycombinator.com/';
+        targetUrlInput.disabled = false;
+      } else {
+        targetUrlInput.value = 'https://news.ycombinator.com/';
+      }
+    });
+
     // Form Submission
     summarizerForm.addEventListener('submit', handleFormSubmit);
   }
 
-  // Handle data fetching and summarizing
+  // Handle data fetching and summarizing (Reading SSE/Chunked response)
   async function handleFormSubmit(e) {
     e.preventDefault();
 
     // 1. Verify API key status before calling
     const hasKey = checkSelectedModelKeyStatus();
     if (!hasKey) {
-      let focusInputId = 'gemini-key-input';
-      if (activeModel === 'openai') focusInputId = 'openai-key-input';
-      if (activeModel === 'claude') focusInputId = 'anthropic-key-input';
-      
-      openModal(focusInputId);
+      openModal('gemini-key-input');
       return;
     }
 
-    // Determine final industry value
+    // Determine final industry value and sanitize using regex
     const customValue = customIndustryInput.value.trim();
-    const finalIndustry = customValue || activeIndustry;
+    // Regex sanitation: Strip any special chars (allowing only alphanumeric, spaces, hyphens)
+    const sanitizedCustomValue = customValue.replace(/[^a-zA-Z0-9\s\-]/g, '');
+    if (customValue !== '' && sanitizedCustomValue.trim() === '') {
+      alert('Please enter a valid custom industry name (alphanumeric, spaces, or hyphens only).');
+      return;
+    }
+    const finalIndustry = sanitizedCustomValue || activeIndustry;
 
     if (!finalIndustry) {
       alert('Please select or specify a target industry.');
       return;
     }
 
+    // Get input source and target URL
+    const targetType = targetTypeSelect.value;
+    const targetUrl = targetUrlInput.value.trim();
+
+    // Validate target URL using strict regex
+    const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+    if (!urlRegex.test(targetUrl)) {
+      alert('Please enter a valid target URL starting with http:// or https://');
+      return;
+    }
+
     // Set UI to loading state
     submitBtn.disabled = true;
+    progressContainer.style.display = 'flex';
+    progressMessage.textContent = 'Initiating scan...';
     loadingState.style.display = 'flex';
     storiesContainer.innerHTML = '';
     resultsHeading.style.display = 'none';
@@ -275,42 +297,72 @@ document.addEventListener('DOMContentLoaded', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-gemini-key': keys.gemini,
-          'x-openai-key': keys.openai,
-          'x-anthropic-key': keys.claude
+          'x-gemini-key': keys.gemini
         },
         body: JSON.stringify({ 
           industry: finalIndustry,
-          model: activeModel
+          model: activeModel,
+          targetType,
+          targetUrl
         })
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        if (data.error === 'API_KEY_REQUIRED') {
-          apiKeyAlert.style.display = 'flex';
-          
-          let focusInputId = 'gemini-key-input';
-          if (activeModel === 'openai') focusInputId = 'openai-key-input';
-          if (activeModel === 'claude') focusInputId = 'anthropic-key-input';
-          
-          openModal(focusInputId);
-          throw new Error(data.message || 'API Key is required.');
-        }
-        throw new Error(data.message || `API error: ${response.status}`);
+        throw new Error(`Connection error: ${response.status}`);
       }
 
-      // Render Results
-      currentIndustryDisplay.textContent = finalIndustry;
-      resultsHeading.style.display = 'block';
-      renderStories(data.stories, finalIndustry);
+      // Read streamed chunks
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let resultReceived = false;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep partial line in buffer
+
+        for (const line of lines) {
+          const cleanLine = line.trim();
+          if (cleanLine.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(cleanLine.substring(6));
+              
+              if (data.type === 'status') {
+                progressMessage.textContent = data.message;
+              } else if (data.type === 'error') {
+                if (data.message === 'API_KEY_REQUIRED_GEMINI') {
+                  apiKeyAlert.style.display = 'flex';
+                  openModal('gemini-key-input');
+                  throw new Error('Gemini API Key is required. Configure in settings.');
+                }
+                throw new Error(data.message);
+              } else if (data.type === 'result') {
+                resultReceived = true;
+                currentIndustryDisplay.textContent = finalIndustry;
+                resultsHeading.style.display = 'block';
+                renderStories(data.stories, finalIndustry);
+              }
+            } catch (err) {
+              console.error('Error parsing stream line:', err);
+            }
+          }
+        }
+      }
+
+      if (!resultReceived) {
+        throw new Error('Connection closed before final summaries could compile.');
+      }
 
     } catch (error) {
       console.error('Fetch error:', error);
       renderErrorState(error.message);
     } finally {
       submitBtn.disabled = false;
+      progressContainer.style.display = 'none';
       loadingState.style.display = 'none';
     }
   }
@@ -322,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="empty-state">
           <div class="empty-icon">📭</div>
           <h3>No stories found</h3>
-          <p>Could not fetch any stories from Hacker News at this moment.</p>
+          <p>Could not fetch any stories from target at this moment.</p>
         </div>
       `;
       return;
@@ -336,17 +388,20 @@ document.addEventListener('DOMContentLoaded', () => {
         </svg>
       ` : '';
 
+      const isCustomUrl = story.id === 'custom-url';
+
       return `
         <article class="story-card" style="animation-delay: ${index * 0.1}s">
           <div class="story-meta">
-            <span class="story-rank">#${index + 1}</span>
-            <span class="story-score">${story.score} points</span>
-            <span class="story-divider">•</span>
-            <span class="story-author">by ${story.author}</span>
-            <span class="story-divider">•</span>
+            ${isCustomUrl ? `<span class="story-rank">Scanned Target</span>` : `<span class="story-rank">#${index + 1}</span>`}
+            ${isCustomUrl ? '' : `<span class="story-score">${story.score} points</span>`}
+            ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}
+            ${isCustomUrl ? '' : `<span class="story-author">by ${story.author}</span>`}
+            ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}
+            ${isCustomUrl ? '' : `
             <a href="${story.hnUrl}" target="_blank" rel="noopener" class="story-hn-link">
               HN Discussion
-            </a>
+            </a>`}
           </div>
           <h3 class="story-title">
             ${story.url ? `<a ${linkTarget}>${story.title} ${externalIcon}</a>` : story.title}

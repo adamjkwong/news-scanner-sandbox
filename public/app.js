@@ -677,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${industryName}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${elapsedSeconds}s)</span>`;
+    resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${escapeHTML(industryName)}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${escapeHTML(elapsedSeconds)}s)</span>`;
 
     let cardsHtml = stories.map((story, index) => {
       const linkTarget = story.url ? `href="${story.url}" target="_blank" rel="noopener"` : '';
@@ -693,9 +693,9 @@ document.addEventListener('DOMContentLoaded', () => {
         <article class="story-card" style="animation-delay: ${index * 0.1}s">
           <div class="story-meta">
             ${isCustomUrl ? `<span class="story-rank">Scanned Target</span>` : `<span class="story-rank">#${index + 1}</span>`}
-            ${isCustomUrl ? '' : `<span class="story-score">${story.score} points</span>`}
+            ${isCustomUrl ? '' : `<span class="story-score">${escapeHTML(story.score)} points</span>`}
             ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}
-            ${isCustomUrl ? '' : `<span class="story-author">by ${story.author}</span>`}
+            ${isCustomUrl ? '' : `<span class="story-author">by ${escapeHTML(story.author)}</span>`}
             ${isCustomUrl ? '' : `<span class="story-divider">•</span>`}
             ${isCustomUrl ? '' : `
             <a href="${story.hnUrl}" target="_blank" rel="noopener" class="story-hn-link">
@@ -703,11 +703,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </a>`}
           </div>
           <h3 class="story-title">
-            ${story.url ? `<a ${linkTarget}>${story.title} ${externalIcon}</a>` : story.title}
+            ${story.url ? `<a ${linkTarget}>${escapeHTML(story.title)} ${externalIcon}</a>` : escapeHTML(story.title)}
           </h3>
           <div class="story-summary-box">
-            <div class="summary-label">Impact on ${industryName}</div>
-            <p class="story-summary">${story.summary}</p>
+            <div class="summary-label">Impact on ${escapeHTML(industryName)}</div>
+            <p class="story-summary">${escapeHTML(story.summary)}</p>
           </div>
         </article>
       `;
@@ -741,7 +741,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="empty-state" style="border-color: light-dark(oklch(80% 0.1 20), oklch(35% 0.08 20));">
         <div class="empty-icon">❌</div>
         <h3 style="color: light-dark(oklch(35% 0.1 20), oklch(85% 0.08 20));">Failed to fetch summaries</h3>
-        <p>${message}</p>
+        <p>${escapeHTML(message)}</p>
         <button type="button" id="retry-btn" class="retry-button">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:inline; vertical-align:middle; margin-right: 0.25rem;">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18" />
@@ -765,5 +765,16 @@ document.addEventListener('DOMContentLoaded', () => {
         summarizerForm.requestSubmit();
       });
     }
+  }
+
+  // HTML escaping to prevent XSS injection attacks
+  function escapeHTML(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 });

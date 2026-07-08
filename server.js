@@ -13,6 +13,58 @@ const PORT = process.env.PORT || 3000;
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Server memory cache (15 min TTL)
+const summaryCache = new Map();
+const CACHE_TTL_MS = 15 * 60 * 1000;
+
+function getCachedSummary(url, industry, model) {
+  const key = `${url}_${industry}_${model}`;
+  if (summaryCache.has(key)) {
+    const entry = summaryCache.get(key);
+    if (Date.now() - entry.timestamp < CACHE_TTL_MS) {
+      return entry.value;
+    }
+    summaryCache.delete(key);
+  }
+  return null;
+}
+
+function setCachedSummary(url, industry, model, summary) {
+  const key = `${url}_${industry}_${model}`;
+  summaryCache.set(key, { value: summary, timestamp: Date.now() });
+}
+
+// Rate limiter middleware (Max 10 runs per minute per IP)
+const rateLimitStore = new Map();
+const rateLimiter = (req, res, next) => {
+  const ip = req.ip;
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 10;
+  
+  if (!rateLimitStore.has(ip)) {
+    rateLimitStore.set(ip, []);
+  }
+  
+  const timestamps = rateLimitStore.get(ip).filter(t => now - t < windowMs);
+  timestamps.push(now);
+  rateLimitStore.set(ip, timestamps);
+  
+  if (timestamps.length > maxRequests) {
+    return res.status(429).json({ error: 'Too many requests. Please wait a minute before retrying.' });
+  }
+  next();
+};
+
+// Security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com http://localhost:11434; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;");
+  next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -31,9 +83,22 @@ async function fetchHNStory(id) {
 // Fetch and extract text from a custom URL
 async function fetchAndExtractText(url) {
   try {
+    const parsedUrl = new URL(url);
+    const host = parsedUrl.hostname.toLowerCase();
+
+    // SSRF Prevention: Block direct localhost and private networks
+    if (host === 'localhost' || 
+        host === '127.0.0.1' || 
+        host === '::1' || 
+        host.startsWith('192.168.') || 
+        host.startsWith('10.') || 
+        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) {
+      throw new Error('Access to local/private network hosts is restricted.');
+    }
+
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'NewsScannerSandbox/1.0; (+https://github.com/adamjkwong/news-scanner-sandbox; compliance-check)'
       }
     });
 
@@ -202,23 +267,43 @@ async function generateGemmaSummary(prompt) {
 
 // Dispatch summary generation based on selected model
 async function generateSummary(title, url, text, industry, model, keys) {
+  // Check memory cache first to ensure efficient execution
+  if (url) {
+    const cachedSummary = getCachedSummary(url, industry, model);
+    if (cachedSummary) {
+      console.log(`[Cache Hit] Serving summary from memory: ${url}`);
+      return cachedSummary;
+    }
+  }
+
   const prompt = buildPrompt(title, url, text, industry);
   try {
+    let summary;
     switch (model) {
       case 'gemini':
         if (!keys.gemini) throw new Error('Gemini API key is required');
-        return await generateGeminiSummary(prompt, keys.gemini);
+        summary = await generateGeminiSummary(prompt, keys.gemini);
+        break;
       case 'openai':
         if (!keys.openai) throw new Error('OpenAI API key is required');
-        return await generateOpenAISummary(prompt, keys.openai);
+        summary = await generateOpenAISummary(prompt, keys.openai);
+        break;
       case 'claude':
         if (!keys.claude) throw new Error('Anthropic API key is required');
-        return await generateAnthropicSummary(prompt, keys.claude);
+        summary = await generateAnthropicSummary(prompt, keys.claude);
+        break;
       case 'gemma':
-        return await generateGemmaSummary(prompt);
+        summary = await generateGemmaSummary(prompt);
+        break;
       default:
         throw new Error(`Unsupported model type: ${model}`);
     }
+
+    // Cache the successful summary
+    if (url && summary) {
+      setCachedSummary(url, industry, model, summary);
+    }
+    return summary;
   } catch (error) {
     console.error(`Error generating ${model} summary for "${title}":`, error.message);
     throw error;
@@ -226,7 +311,7 @@ async function generateSummary(title, url, text, industry, model, keys) {
 }
 
 // API endpoint to fetch and summarize (Streaming Response)
-app.post('/api/summarize', async (req, res) => {
+app.post('/api/summarize', rateLimiter, async (req, res) => {
   const { industry, model = 'gemini', targetType = 'hn', targetUrl = '', delay = 2500 } = req.body;
   console.log(`[API Request] model=${model}, targetType=${targetType}, targetUrl="${targetUrl}", industry="${industry}", delay=${delay}`);
   

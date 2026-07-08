@@ -1062,3 +1062,43 @@
     padding: 1.25rem;
   }
 }
+
+/* Footer styles */
+.app-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  font-family: 'Outfit', sans-serif;
+}
+
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.footer-disclaimer,
+.footer-copyright {
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.footer-disclaimer strong,
+.footer-copyright strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.footer-version {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  margin-top: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}

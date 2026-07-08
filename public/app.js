@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Render Results
       currentIndustryDisplay.textContent = finalIndustry;
       resultsHeading.style.display = 'block';
-      renderStories(data.stories);
+      renderStories(data.stories, finalIndustry);
 
     } catch (error) {
       console.error('Fetch error:', error);
@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Render story list
-  function renderStories(stories) {
+  function renderStories(stories, industryName) {
     if (!stories || stories.length === 0) {
       storiesContainer.innerHTML = `
         <div class="empty-state">
@@ -352,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ${story.url ? `<a ${linkTarget}>${story.title} ${externalIcon}</a>` : story.title}
           </h3>
           <div class="story-summary-box">
-            <div class="summary-label">Industry Impact</div>
+            <div class="summary-label">Impact on ${industryName}</div>
             <p class="story-summary">${story.summary}</p>
           </div>
         </article>

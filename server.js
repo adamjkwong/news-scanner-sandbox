@@ -11,6 +11,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -328,6 +330,11 @@ app.post('/api/summarize', async (req, res) => {
           } catch (e) {
             console.warn(`Could not scrape content for ${url}:`, e.message);
           }
+        }
+
+        if (index > 1) {
+          sendProgress(`Rate limit cooldown, waiting a moment...`);
+          await sleep(2500);
         }
 
         sendProgress(`Summarizing article ${index} of 5: "${title.substring(0, 45)}..."`);

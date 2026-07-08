@@ -152,7 +152,7 @@ function buildPrompt(title, url, text, industry) {
 
 Article Title: ${title}
 Article Link: ${url || 'N/A'}
-${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : ''}
+${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : 'Note: The article body text is currently unavailable. Extrapolate the core news event, technical concept, or topic from the title and provide a highly detailed industry impact analysis based on your general knowledge.'}
 
 Rules:
 1. Return exactly 2 sentences. No headers, lists, markdown bold (*), or introductory text.
@@ -171,7 +171,7 @@ async function generateGeminiSummary(prompt, apiKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 250, temperature: 0.2 }
+        generationConfig: { maxOutputTokens: 600, temperature: 0.2 }
       })
     }
   );
@@ -198,7 +198,7 @@ async function generateOpenAISummary(prompt, apiKey) {
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: 250,
+      max_tokens: 600,
       temperature: 0.2
     })
   });
@@ -225,7 +225,7 @@ async function generateAnthropicSummary(prompt, apiKey) {
     },
     body: JSON.stringify({
       model: 'claude-3-5-haiku-20241022',
-      max_tokens: 250,
+      max_tokens: 600,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2
     })

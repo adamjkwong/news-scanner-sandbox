@@ -1102,3 +1102,10 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
+/* Spinner paused override */
+.progress-container.paused .progress-spinner {
+  animation: none;
+  border-color: var(--text-secondary);
+  opacity: 0.6;
+}

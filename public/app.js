@@ -533,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn.disabled = true;
     stopBtn.style.display = 'inline-flex';
     progressContainer.style.display = 'flex';
+    progressContainer.classList.remove('paused');
     progressMessage.textContent = 'Initiating scan...';
     scanTimerElement.textContent = '0.00s';
     loadingState.style.display = 'flex';
@@ -541,6 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let startTime = Date.now();
     let elapsedSeconds = '0.00';
+    let latestStories = [];
     
     abortController = new AbortController();
 
@@ -606,13 +608,15 @@ document.addEventListener('DOMContentLoaded', () => {
               throw new Error(data.message);
             } else if (data.type === 'partial_result') {
               loadingState.style.display = 'none';
-              renderStories(data.stories, finalIndustry, elapsedSeconds, true);
+              latestStories = data.stories;
+              renderStories(latestStories, finalIndustry, elapsedSeconds, true);
             } else if (data.type === 'result') {
               resultReceived = true;
               loadingState.style.display = 'none';
+              latestStories = data.stories;
               currentIndustryDisplay.textContent = finalIndustry;
               resultsHeading.style.display = 'block';
-              renderStories(data.stories, finalIndustry, elapsedSeconds, false);
+              renderStories(latestStories, finalIndustry, elapsedSeconds, false);
             }
           }
         }
@@ -632,9 +636,10 @@ document.addEventListener('DOMContentLoaded', () => {
           if (data.type === 'result') {
             resultReceived = true;
             loadingState.style.display = 'none';
+            latestStories = data.stories;
             currentIndustryDisplay.textContent = finalIndustry;
             resultsHeading.style.display = 'block';
-            renderStories(data.stories, finalIndustry, elapsedSeconds, false);
+            renderStories(latestStories, finalIndustry, elapsedSeconds, false);
           } else if (data.type === 'error') {
             throw new Error(data.message);
           }
@@ -648,7 +653,25 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (error) {
       if (error.name === 'AbortError') {
         console.log('Main scan aborted.');
-        renderErrorState('Scan cancelled by user.');
+        clearInterval(timerInterval);
+        
+        // Pause/Stop visual status state
+        progressMessage.textContent = 'Scan stopped. Awaiting user input...';
+        progressContainer.classList.add('paused');
+        
+        if (latestStories && latestStories.length > 0) {
+          renderStories(latestStories, finalIndustry, elapsedSeconds, false);
+          resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${escapeHTML(finalIndustry)}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${escapeHTML(elapsedSeconds)}s - Stopped)</span>`;
+          resultsHeading.style.display = 'block';
+        } else {
+          storiesContainer.innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon">⏹️</div>
+              <h3>Scan Stopped</h3>
+              <p>The scan was aborted before any stories could be fetched.</p>
+            </div>
+          `;
+        }
       } else {
         console.error('Fetch error:', error);
         renderErrorState(error.message);
@@ -659,8 +682,12 @@ document.addEventListener('DOMContentLoaded', () => {
       stopBtn.style.display = 'none';
       isScanning = false;
       userClicked = false;
-      progressContainer.style.display = 'none';
       loadingState.style.display = 'none';
+      
+      const wasAborted = abortController && abortController.signal.aborted;
+      if (!wasAborted) {
+        progressContainer.style.display = 'none';
+      }
     }
   }
 

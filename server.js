@@ -158,8 +158,9 @@ Rules:
 1. Return exactly 2 sentences. No headers, lists, markdown bold (*), or introductory text.
 2. Sentence 1: Analyze the core technical innovation, news event, or discovery, and connect it directly to the target industry's current landscape.
 3. Sentence 2: Explain the direct, actionable business opportunity, threat, cost impact, or future trend for companies/professionals in that industry.
-4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures).
-5. Ensure both sentences are detailed, complex, and analytically complete. Do not write short, sparse, or superficial sentences.`;
+4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures). Do not write period-based abbreviations like "e.g.", "i.e.", "U.S.", or "vs." inside sentences; write them out fully as "for example", "that is", "United States", or "versus" to prevent structure disruption.
+5. Ensure both sentences are detailed, complex, and analytically complete. Do not write short, sparse, or superficial sentences.
+6. Make sure both sentences are 100% grammatically complete and end with a clear final period. Do not cut off mid-thought.`;
 }
 
 // Generate summary using Gemini API
@@ -244,13 +245,17 @@ async function generateAnthropicSummary(prompt, apiKey) {
 
 // Generate summary using local Gemma 4 (Ollama)
 async function generateGemmaSummary(prompt) {
-  const response = await fetch('http://localhost:11434/api/generate', {
+  const response = await fetch('http://localhost:11434/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'gemma4:e4b',
-      prompt: prompt,
-      stream: false
+      messages: [{ role: 'user', content: prompt }],
+      stream: false,
+      options: {
+        num_predict: 800,
+        temperature: 0.2
+      }
     })
   });
 
@@ -260,7 +265,7 @@ async function generateGemmaSummary(prompt) {
 
   const data = await response.json();
   if (data.error) throw new Error(data.error);
-  const text = data.response;
+  const text = data.message?.content;
   if (!text) throw new Error('Empty response from local Gemma 4');
   return text.trim();
 }

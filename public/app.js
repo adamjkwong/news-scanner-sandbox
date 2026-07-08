@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let hoverScanFinalIndustry = '';
   let hoverScanTargetType = '';
   let hoverScanTargetUrl = '';
+  let hoverScanModel = '';
   let userClicked = false;
   let abortController = null;
 
@@ -212,6 +213,16 @@ document.addEventListener('DOMContentLoaded', () => {
       targetChip.setAttribute('aria-checked', 'true');
       activeModel = targetChip.dataset.value;
 
+      // Invalidate hover scan cache and abort running prefetch when model changes
+      if (hoverScanActive) {
+        if (abortController) {
+          abortController.abort();
+        }
+        hoverScanActive = false;
+      }
+      hoverScanResult = null;
+      hoverScanError = null;
+
       checkSelectedModelKeyStatus();
     });
 
@@ -299,6 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
     hoverScanFinalIndustry = finalIndustry;
     hoverScanTargetType = targetType;
     hoverScanTargetUrl = targetUrl;
+    hoverScanModel = activeModel;
     hoverScanStartTime = Date.now();
     hoverScanElapsedSeconds = '0.00';
 
@@ -452,7 +464,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check if the user changed the input fields since we started hover scan
     const inputsChanged = targetUrl !== hoverScanTargetUrl || 
                           targetType !== hoverScanTargetType || 
-                          finalIndustry !== hoverScanFinalIndustry;
+                          finalIndustry !== hoverScanFinalIndustry ||
+                          activeModel !== hoverScanModel;
 
     // If inputs changed, discard hover scan
     if (inputsChanged && hoverScanActive) {

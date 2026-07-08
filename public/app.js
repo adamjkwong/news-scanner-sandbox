@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Theme Logic
   function initTheme() {
     const savedTheme = localStorage.getItem('color-scheme') || 'light dark';
-    document.querySelector('meta[name="color-scheme"]').content = savedTheme;
+    document.documentElement.style.colorScheme = savedTheme;
     updateThemeIcons(savedTheme);
   }
 
@@ -67,8 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function toggleTheme() {
-    const meta = document.querySelector('meta[name="color-scheme"]');
-    const current = meta.content;
+    const current = document.documentElement.style.colorScheme || 'light dark';
     let nextTheme = 'light';
 
     if (current === 'light') {
@@ -80,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
       nextTheme = systemIsDark ? 'light' : 'dark';
     }
 
-    meta.content = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
     localStorage.setItem('color-scheme', nextTheme);
     updateThemeIcons(nextTheme);
   }
@@ -338,6 +337,24 @@ document.addEventListener('DOMContentLoaded', () => {
               console.error('Error parsing stream line:', err);
             }
           }
+        }
+      }
+
+      // Parse any remaining content in the buffer after stream ends
+      const trailingContent = buffer.trim();
+      if (trailingContent.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(trailingContent.substring(6));
+          if (data.type === 'result') {
+            resultReceived = true;
+            currentIndustryDisplay.textContent = finalIndustry;
+            resultsHeading.style.display = 'block';
+            renderStories(data.stories, finalIndustry);
+          } else if (data.type === 'error') {
+            throw new Error(data.message);
+          }
+        } catch (err) {
+          console.error('Error parsing trailing buffer:', err);
         }
       }
 

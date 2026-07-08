@@ -57,7 +57,7 @@
     --shadow-md: 0 10px 30px oklch(22.8% 0.038 217.4 / 0.06);
     --shadow-lg: 0 20px 50px oklch(22.8% 0.038 217.4 / 0.12);
 
-    accent-color: var(--color-emerald-green);
+    accent-color: var(--color-lava-600);
   }
 
   body {
@@ -185,13 +185,13 @@
 
   .icon-button:hover {
     transform: translateY(-2px);
-    border-color: var(--color-emerald-green);
+    border-color: var(--color-lava-600);
     background-color: light-dark(rgba(255,255,255,0.9), rgba(255,255,255,0.05));
     box-shadow: var(--shadow-sm);
   }
 
   .icon-button:focus-visible {
-    outline: 2px solid var(--color-emerald-green);
+    outline: 2px solid var(--color-lava-600);
     outline-offset: 2px;
   }
 
@@ -296,15 +296,15 @@
   }
 
   .model-chip:hover {
-    border-color: var(--color-emerald-green);
+    border-color: var(--color-lava-600);
     transform: translateY(-1px);
     box-shadow: var(--shadow-sm);
   }
 
   .model-chip.active {
-    border-color: var(--color-emerald-green);
-    background: light-dark(oklch(96% 0.02 149 / 0.5), oklch(62.7% 0.194 149 / 0.08));
-    box-shadow: 0 0 0 1px var(--color-emerald-green), var(--shadow-sm);
+    border-color: var(--color-lava-600);
+    background: light-dark(oklch(96% 0.02 29.2 / 0.5), oklch(60.9% 0.258 29.2 / 0.08));
+    box-shadow: 0 0 0 1px var(--color-lava-600), var(--shadow-sm);
   }
 
   .model-chip.active:hover {
@@ -341,7 +341,7 @@
   }
 
   .model-chip:focus-visible {
-    outline: 2px solid var(--color-emerald-green);
+    outline: 2px solid var(--color-lava-600);
     outline-offset: 2px;
   }
 
@@ -371,14 +371,14 @@
   }
 
   .chip.active {
-    background-color: var(--color-emerald-green);
-    border-color: var(--color-emerald-green);
+    background-color: var(--color-lava-600);
+    border-color: var(--color-lava-600);
     color: white;
-    box-shadow: 0 4px 10px oklch(62.7% 0.194 149 / 0.2);
+    box-shadow: 0 4px 10px oklch(60.9% 0.258 29.2 / 0.2);
   }
 
   .chip:focus-visible {
-    outline: 2px solid var(--color-emerald-green);
+    outline: 2px solid var(--color-lava-600);
     outline-offset: 2px;
   }
 
@@ -398,8 +398,8 @@
   .custom-industry-wrapper input:focus,
   .input-wrapper input:focus {
     outline: none;
-    border-color: var(--color-emerald-green);
-    box-shadow: 0 0 0 3px oklch(62.7% 0.194 149 / 0.15);
+    border-color: var(--color-lava-600);
+    box-shadow: 0 0 0 3px oklch(60.9% 0.258 29.2 / 0.15);
   }
 
   /* Target Selector */
@@ -418,7 +418,7 @@
   }
 
   .target-type-select:focus {
-    border-color: var(--color-emerald-green);
+    border-color: var(--color-lava-600);
   }
 
   /* Begin Action Button (Green Shimmering) */
@@ -577,7 +577,7 @@
   }
 
   .story-hn-link {
-    color: var(--color-emerald-green);
+    color: var(--color-lava-600);
     font-weight: 600;
     display: inline-flex;
     align-items: center;
@@ -604,7 +604,7 @@
   }
 
   .story-title a:hover {
-    color: var(--color-emerald-green);
+    color: var(--color-lava-600);
   }
 
   .story-title svg {
@@ -840,7 +840,7 @@
 
   .password-field-wrapper input:focus {
     outline: none;
-    border-color: var(--color-emerald-green);
+    border-color: var(--color-lava-600);
   }
 
   .password-field-wrapper input:disabled {
@@ -870,7 +870,7 @@
   }
 
   .toggle-visibility-btn:focus-visible {
-    outline: 2px solid var(--color-emerald-green);
+    outline: 2px solid var(--color-lava-600);
   }
 
   .toggle-visibility-btn:disabled {
@@ -898,14 +898,14 @@
   }
 
   .help-text a {
-    color: var(--color-emerald-green);
+    color: var(--color-lava-600);
     text-decoration: underline;
     font-weight: 500;
   }
 
   .save-button {
     width: 100%;
-    background: var(--color-emerald-green);
+    background: var(--color-lava-600);
     color: white;
     border: none;
     border-radius: 8px;
@@ -915,7 +915,7 @@
     margin-top: 1rem;
     min-block-size: 46px;
     transition: filter 0.2s ease, transform 0.1s ease;
-    box-shadow: 0 4px 10px oklch(62.7% 0.194 149 / 0.15);
+    box-shadow: 0 4px 10px oklch(60.9% 0.258 29.2 / 0.15);
   }
 
   .save-button:hover {

@@ -54,7 +54,23 @@ async function fetchAndExtractText(url) {
       .trim();
 
     // Limit text size sent to LLM to prevent token overflows (approx 6000 chars)
-    const excerpt = textContent.substring(0, 6000);
+    let excerpt = textContent.substring(0, 6000);
+
+    // Detect if content is just a generic cookie/bot warning or too sparse to be useful
+    const lowerExcerpt = excerpt.toLowerCase();
+    const isUseless = excerpt.length < 250 || 
+                      lowerExcerpt.includes('enable javascript') || 
+                      lowerExcerpt.includes('cloudflare') || 
+                      lowerExcerpt.includes('access denied') ||
+                      lowerExcerpt.includes('robot check') ||
+                      lowerExcerpt.includes('captcha') ||
+                      lowerExcerpt.includes('cookie settings') ||
+                      lowerExcerpt.includes('agree to our cookies');
+
+    if (isUseless) {
+      console.warn(`Scraped page content for ${url} is sparse or a bot check. Discarding text context.`);
+      excerpt = '';
+    }
 
     return { title, excerpt };
   } catch (error) {
@@ -75,7 +91,8 @@ Rules:
 1. Return exactly 2 sentences. No headers, lists, markdown bold (*), or introductory text.
 2. Sentence 1: Analyze the core technical innovation, news event, or discovery, and connect it directly to the target industry's current landscape.
 3. Sentence 2: Explain the direct, actionable business opportunity, threat, cost impact, or future trend for companies/professionals in that industry.
-4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures).`;
+4. DO NOT use generic fillers like "this matters because it affects efficiency" or "healthcare companies can use this." Be specific. Use concrete concepts (e.g. data sovereignty, ZFS pool overheads, vendor lock-in, HIPAA auditing, diagnostic pipelines, edge network latency, capital expenditures, zero-trust architectures).
+5. Ensure both sentences are detailed, complex, and analytically complete. Do not write short, sparse, or superficial sentences.`;
 }
 
 // Generate summary using Gemini API

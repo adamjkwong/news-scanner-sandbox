@@ -202,13 +202,14 @@ async function generateSummary(title, url, text, industry, model, keys) {
     }
   } catch (error) {
     console.error(`Error generating ${model} summary for "${title}":`, error.message);
-    return `Could not generate summary: ${error.message}`;
+    throw error;
   }
 }
 
 // API endpoint to fetch and summarize (Streaming Response)
 app.post('/api/summarize', async (req, res) => {
   const { industry, model = 'gemini', targetType = 'hn', targetUrl = '' } = req.body;
+  console.log(`[API Request] model=${model}, targetType=${targetType}, targetUrl="${targetUrl}", industry="${industry}"`);
   
   // Extract keys from request headers or environment variables
   const keys = {
@@ -297,13 +298,23 @@ app.post('/api/summarize', async (req, res) => {
       for (const story of validStories) {
         const title = story.title || 'Untitled';
         const url = story.url || '';
-        const text = story.text || '';
+        let articleText = story.text || '';
         const score = story.score || 0;
         const author = story.by || 'unknown';
         const id = story.id;
 
+        if (url && !articleText) {
+          try {
+            sendProgress(`Scraping content ${index} of 5: "${title.substring(0, 30)}..."`);
+            const scraped = await fetchAndExtractText(url);
+            articleText = scraped.excerpt;
+          } catch (e) {
+            console.warn(`Could not scrape content for ${url}:`, e.message);
+          }
+        }
+
         sendProgress(`Summarizing article ${index} of 5: "${title.substring(0, 45)}..."`);
-        const summary = await generateSummary(title, url, text, industry, model, keys);
+        const summary = await generateSummary(title, url, articleText, industry, model, keys);
 
         summarizedStories.push({
           id,

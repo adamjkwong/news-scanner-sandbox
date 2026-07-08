@@ -315,26 +315,28 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const line of lines) {
           const cleanLine = line.trim();
           if (cleanLine.startsWith('data: ')) {
+            let data = null;
             try {
-              const data = JSON.parse(cleanLine.substring(6));
-              
-              if (data.type === 'status') {
-                progressMessage.textContent = data.message;
-              } else if (data.type === 'error') {
-                if (data.message === 'API_KEY_REQUIRED_GEMINI') {
-                  apiKeyAlert.style.display = 'flex';
-                  openModal('gemini-key-input');
-                  throw new Error('Gemini API Key is required. Configure in settings.');
-                }
-                throw new Error(data.message);
-              } else if (data.type === 'result') {
-                resultReceived = true;
-                currentIndustryDisplay.textContent = finalIndustry;
-                resultsHeading.style.display = 'block';
-                renderStories(data.stories, finalIndustry);
-              }
+              data = JSON.parse(cleanLine.substring(6));
             } catch (err) {
               console.error('Error parsing stream line:', err);
+              continue;
+            }
+
+            if (data.type === 'status') {
+              progressMessage.textContent = data.message;
+            } else if (data.type === 'error') {
+              if (data.message === 'API_KEY_REQUIRED_GEMINI') {
+                apiKeyAlert.style.display = 'flex';
+                openModal('gemini-key-input');
+                throw new Error('Gemini API Key is required. Configure in settings.');
+              }
+              throw new Error(data.message);
+            } else if (data.type === 'result') {
+              resultReceived = true;
+              currentIndustryDisplay.textContent = finalIndustry;
+              resultsHeading.style.display = 'block';
+              renderStories(data.stories, finalIndustry);
             }
           }
         }
@@ -343,8 +345,14 @@ document.addEventListener('DOMContentLoaded', () => {
       // Parse any remaining content in the buffer after stream ends
       const trailingContent = buffer.trim();
       if (trailingContent.startsWith('data: ')) {
+        let data = null;
         try {
-          const data = JSON.parse(trailingContent.substring(6));
+          data = JSON.parse(trailingContent.substring(6));
+        } catch (err) {
+          console.error('Error parsing trailing buffer:', err);
+        }
+
+        if (data) {
           if (data.type === 'result') {
             resultReceived = true;
             currentIndustryDisplay.textContent = finalIndustry;
@@ -353,8 +361,6 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (data.type === 'error') {
             throw new Error(data.message);
           }
-        } catch (err) {
-          console.error('Error parsing trailing buffer:', err);
         }
       }
 

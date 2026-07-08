@@ -227,8 +227,8 @@ async function generateSummary(title, url, text, industry, model, keys) {
 
 // API endpoint to fetch and summarize (Streaming Response)
 app.post('/api/summarize', async (req, res) => {
-  const { industry, model = 'gemini', targetType = 'hn', targetUrl = '' } = req.body;
-  console.log(`[API Request] model=${model}, targetType=${targetType}, targetUrl="${targetUrl}", industry="${industry}"`);
+  const { industry, model = 'gemini', targetType = 'hn', targetUrl = '', delay = 2500 } = req.body;
+  console.log(`[API Request] model=${model}, targetType=${targetType}, targetUrl="${targetUrl}", industry="${industry}", delay=${delay}`);
   
   // Extract keys from request headers or environment variables
   const keys = {
@@ -334,7 +334,7 @@ app.post('/api/summarize', async (req, res) => {
 
         if (index > 1) {
           sendProgress(`Rate limit cooldown, waiting a moment...`);
-          await sleep(2500);
+          await sleep(delay);
         }
 
         sendProgress(`Summarizing article ${index} of 5: "${title.substring(0, 45)}..."`);

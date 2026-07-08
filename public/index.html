@@ -50,8 +50,8 @@
   <main class="main-content">
     <div class="content-container">
       <section class="intro-section">
-        <h1>Scan & Summarize Hacker News</h1>
-        <p class="subtitle">Extract strategic implications, threats, and opportunities from Hacker News or custom web articles using advanced LLMs.</p>
+        <h1>Summarize Information</h1>
+        <p class="subtitle">Scan Hacker News or custom articles to extract strategic implications, threats, and opportunities using advanced LLMs.</p>
       </section>
 
       <!-- API Key warning banner -->
@@ -131,6 +131,7 @@
           <div id="progress-container" class="progress-container" style="display: none;">
             <div class="progress-spinner"></div>
             <p id="progress-message" class="progress-message">Initiating scan...</p>
+            <div id="scan-timer" class="scan-timer">0.00s</div>
           </div>
 
           <h2 id="results-heading" class="results-title" style="display: none;">Top Stories Summary for <span id="current-industry-display">Tech</span></h2>

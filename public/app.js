@@ -32,10 +32,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const currentIndustryDisplay = document.getElementById('current-industry-display');
   const loadingState = document.getElementById('loading-state');
   const storiesContainer = document.getElementById('stories-container');
+  const scanTimerElement = document.getElementById('scan-timer');
 
   // App State
   let activeModel = 'gemini';
   let activeIndustry = 'Tech';
+  let isScanning = false;
+  let rateLimitDelay = 2500;
 
   // API Keys state
   let keys = {
@@ -230,6 +233,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
+    // Hover to trigger scan
+    submitBtn.addEventListener('mouseenter', () => {
+      if (!submitBtn.disabled && !isScanning) {
+        rateLimitDelay = 2500; // Reset rate limit to default on fresh scan
+        summarizerForm.requestSubmit();
+      }
+    });
+
+    submitBtn.addEventListener('click', () => {
+      rateLimitDelay = 2500; // Reset rate limit on manual click
+    });
+
     // Form Submission
     summarizerForm.addEventListener('submit', handleFormSubmit);
   }
@@ -237,28 +252,27 @@ document.addEventListener('DOMContentLoaded', () => {
   // Handle data fetching and summarizing (Reading SSE/Chunked response)
   async function handleFormSubmit(e) {
     e.preventDefault();
+    if (isScanning) return;
+    isScanning = true;
 
     // 1. Verify API key status before calling
     const hasKey = checkSelectedModelKeyStatus();
     if (!hasKey) {
       openModal('gemini-key-input');
+      isScanning = false;
       return;
     }
 
     // Determine final industry value and sanitize using regex
     const customValue = customIndustryInput.value.trim();
-    // Regex sanitation: Strip any special chars (allowing only alphanumeric, spaces, hyphens)
     const sanitizedCustomValue = customValue.replace(/[^a-zA-Z0-9\s\-]/g, '');
     if (customValue !== '' && sanitizedCustomValue.trim() === '') {
       alert('Please enter a valid custom industry name (alphanumeric, spaces, or hyphens only).');
+      isScanning = false;
       return;
     }
-    const finalIndustry = sanitizedCustomValue || activeIndustry;
 
-    if (!finalIndustry) {
-      alert('Please select or specify a target industry.');
-      return;
-    }
+    const finalIndustry = customValue !== '' ? sanitizedCustomValue : activeIndustry;
 
     // Get target URL and dynamically determine type
     const targetUrl = targetUrlInput.value.trim();
@@ -268,6 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
     if (!urlRegex.test(targetUrl)) {
       alert('Please enter a valid target URL starting with http:// or https://');
+      isScanning = false;
       return;
     }
 
@@ -275,9 +290,17 @@ document.addEventListener('DOMContentLoaded', () => {
     submitBtn.disabled = true;
     progressContainer.style.display = 'flex';
     progressMessage.textContent = 'Initiating scan...';
+    scanTimerElement.textContent = '0.00s';
     loadingState.style.display = 'flex';
     storiesContainer.innerHTML = '';
     resultsHeading.style.display = 'none';
+
+    let startTime = Date.now();
+    let elapsedSeconds = '0.00';
+    const timerInterval = setInterval(() => {
+      elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(2);
+      scanTimerElement.textContent = `${elapsedSeconds}s`;
+    }, 10);
 
     try {
       const response = await fetch('/api/summarize', {
@@ -290,7 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
           industry: finalIndustry,
           model: activeModel,
           targetType,
-          targetUrl
+          targetUrl,
+          delay: rateLimitDelay
         })
       });
 
@@ -336,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
               resultReceived = true;
               currentIndustryDisplay.textContent = finalIndustry;
               resultsHeading.style.display = 'block';
-              renderStories(data.stories, finalIndustry);
+              renderStories(data.stories, finalIndustry, elapsedSeconds);
             }
           }
         }
@@ -357,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resultReceived = true;
             currentIndustryDisplay.textContent = finalIndustry;
             resultsHeading.style.display = 'block';
-            renderStories(data.stories, finalIndustry);
+            renderStories(data.stories, finalIndustry, elapsedSeconds);
           } else if (data.type === 'error') {
             throw new Error(data.message);
           }
@@ -372,14 +396,16 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Fetch error:', error);
       renderErrorState(error.message);
     } finally {
+      clearInterval(timerInterval);
       submitBtn.disabled = false;
+      isScanning = false;
       progressContainer.style.display = 'none';
       loadingState.style.display = 'none';
     }
   }
 
   // Render story list
-  function renderStories(stories, industryName) {
+  function renderStories(stories, industryName, elapsedSeconds) {
     if (!stories || stories.length === 0) {
       storiesContainer.innerHTML = `
         <div class="empty-state">
@@ -390,6 +416,8 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       return;
     }
+
+    resultsHeading.innerHTML = `Top Stories Summary for <span id="current-industry-display">${industryName}</span> <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-left: 0.5rem; opacity: 0.8;">(Scan run time: ${elapsedSeconds}s)</span>`;
 
     const html = stories.map((story, index) => {
       const linkTarget = story.url ? `href="${story.url}" target="_blank" rel="noopener"` : '';
@@ -428,14 +456,29 @@ document.addEventListener('DOMContentLoaded', () => {
     storiesContainer.innerHTML = html;
   }
 
-  // Render error message card
+  // Render error message card with retry slowdown option
   function renderErrorState(message) {
     storiesContainer.innerHTML = `
       <div class="empty-state" style="border-color: light-dark(oklch(80% 0.1 20), oklch(35% 0.08 20));">
         <div class="empty-icon">❌</div>
         <h3 style="color: light-dark(oklch(35% 0.1 20), oklch(85% 0.08 20));">Failed to fetch summaries</h3>
         <p>${message}</p>
+        <button type="button" id="retry-btn" class="retry-button">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:inline; vertical-align:middle; margin-right: 0.25rem;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H18" />
+          </svg>
+          <span>Retry (Slow Mode)</span>
+        </button>
       </div>
     `;
+
+    const retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', () => {
+        rateLimitDelay = 5000; // Slow down rate limits on retry!
+        progressMessage.textContent = 'Retrying with slower rate limit (5.0s delay)...';
+        summarizerForm.requestSubmit();
+      });
+    }
   }
 });

@@ -510,6 +510,48 @@
     to { transform: rotate(360deg); }
   }
 
+  .scan-timer {
+    margin-left: auto;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: var(--color-lava-600);
+    background: light-dark(var(--color-oat-100), var(--color-navy-900));
+    border: 1px solid var(--border-color);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .retry-button {
+    margin-top: 1rem;
+    background-color: var(--color-lava-600);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.55rem 1.15rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-block-size: 38px;
+    box-shadow: 0 2px 8px oklch(60.9% 0.258 29.2 / 0.15);
+  }
+
+  .retry-button:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px oklch(60.9% 0.258 29.2 / 0.2);
+  }
+
+  .retry-button:active {
+    transform: translateY(0);
+  }
+
   /* Results Section */
   .results-section {
     display: flex;

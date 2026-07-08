@@ -432,7 +432,7 @@ app.post('/api/summarize', rateLimiter, async (req, res) => {
 
   const sendResult = (stories) => {
     // Cache the entire scan result array
-    memoryCache.set(scanKey, {
+    summaryCache.set(scanKey, {
       stories,
       timestamp: Date.now()
     });
@@ -441,8 +441,8 @@ app.post('/api/summarize', rateLimiter, async (req, res) => {
   };
 
   // Check memory cache for the entire scan first
-  const cachedScan = memoryCache.get(scanKey);
-  if (cachedScan && Date.now() - cachedScan.timestamp < 15 * 60 * 1000) {
+  const cachedScan = summaryCache.get(scanKey);
+  if (cachedScan && Date.now() - cachedScan.timestamp < CACHE_TTL_MS) {
     console.log(`[Cache Hit] Serving entire scan from memory cache: ${scanKey}`);
     sendProgress('Serving summaries from cache...');
     return sendResult(cachedScan.stories);

@@ -114,6 +114,40 @@
       margin-bottom: 8px;
     }
 
+    /* Part 2 Green Section overrides */
+    .green-section {
+      border-color: #059669;
+    }
+    .green-section h2 {
+      color: #10b981;
+    }
+    .green-section .cue {
+      background-color: rgba(16, 185, 129, 0.08);
+      border-left-color: #10b981;
+    }
+    .green-section .line-marker {
+      color: #10b981;
+      background-color: rgba(16, 185, 129, 0.15);
+      border-color: #10b981;
+    }
+
+    /* Part 3 Yellow Section overrides */
+    .yellow-section {
+      border-color: #d97706;
+    }
+    .yellow-section h2 {
+      color: #f59e0b;
+    }
+    .yellow-section .cue {
+      background-color: rgba(245, 158, 11, 0.08);
+      border-left-color: #f59e0b;
+    }
+    .yellow-section .line-marker {
+      color: #f59e0b;
+      background-color: rgba(245, 158, 11, 0.15);
+      border-color: #f59e0b;
+    }
+
     pre {
       background-color: var(--code-bg);
       border: 1px solid var(--border);
@@ -170,7 +204,7 @@
     </div>
 
     <!-- SECTION 2 -->
-    <div class="section">
+    <div class="section green-section">
       <div class="section-header">
         <h2>Part 2: Frontend UX Walkthrough</h2>
         <span class="time-tag">0:20 - 0:40</span>
@@ -205,7 +239,7 @@
     </div>
 
     <!-- SECTION 3 -->
-    <div class="section">
+    <div class="section yellow-section">
       <div class="section-header">
         <h2>Part 3: Backend Server Walkthrough</h2>
         <span class="time-tag">0:40 - 0:55</span>
@@ -254,14 +288,6 @@ if (cachedScan && Date.now() - cachedScan.timestamp < CACHE_TTL_MS) {
   sendProgress('Serving summaries from cache...');
   return sendResult(cachedScan.stories);
 }</code></pre>
-
-      <div class="speak-block" style="margin-top: 30px;">
-        "If it's not saved, we pull the articles, read the text, query the model, and stream the results back to the browser."
-        <span class="line-marker">[server.js - Line 618]</span>
-      </div>
-
-      <span class="code-label">Write Stream Chunk:</span>
-      <pre><code>res.write(`data: ${JSON.stringify({ type: 'partial_result', stories: summarizedStories })}\n\n`);</code></pre>
     </div>
 
     <!-- SECTION 4 -->

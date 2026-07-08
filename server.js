@@ -148,18 +148,19 @@ async function fetchAndExtractText(url) {
 
 // Construct highly analytical, specific industry prompts
 function buildPrompt(title, url, text, industry) {
-  return `Write a professional, exactly two-sentence analysis of the business impact of this article on the "${industry}" industry.
+  return `Write a highly strategic, professional, and concrete two-sentence business impact analysis of the following article on the "${industry}" industry.
 
 Article Title: ${title}
 Article Link: ${url || 'N/A'}
 ${text ? `Article Text excerpt: ${text.substring(0, 3000)}` : 'Note: The article text is currently unavailable. Extrapolate the core concept from the title and write the analysis using your general knowledge.'}
 
 Instructions:
-1. Write exactly 2 sentences. Do not write a list, bullet points, headers, or markdown bold formatting.
-2. Sentence 1: Summarize the core news, technology, or discovery, connecting it to the "${industry}" landscape.
-3. Sentence 2: Detail the direct business opportunity, threat, cost impact, or trend for companies in the "${industry}" industry.
-4. Ensure both sentences are detailed, grammatically complete, have proper punctuation, and end with a final period. Do not cut off mid-sentence.
-5. Do not use abbreviations like "e.g.", "i.e.", "U.S.", or "vs."; write them out fully as "for example", "that is", "United States", or "versus" to avoid sentence structure issues.`;
+1. Write exactly 2 sentences. Do not use lists, bullet points, headers, or markdown bold formatting.
+2. Sentence 1: Analyze the core technical innovation or news event in depth, connecting it directly to the target "${industry}" landscape.
+3. Sentence 2: Detail the direct, actionable business opportunity, threat, cost impact, or future trend for companies/professionals in the "${industry}" industry.
+4. Ensure both sentences are highly detailed, analytically complete, and sophisticated. Do not write short, sparse, or superficial sentences.
+5. Make sure both sentences are 100% grammatically complete and end with a clear final period. Do not cut off mid-thought.
+6. Do not use abbreviations like "e.g.", "i.e.", "U.S.", or "vs."; write them out fully as "for example", "that is", "United States", or "versus" to avoid sentence structure issues.`;
 }
 
 // Generate summary using Gemini API
